@@ -1,0 +1,144 @@
+---
+title: "Machine Learning - Class Project"
+author: "Chris Serrano"
+date: "January 25, 2015"
+output: html_document
+---
+### Executive Summary
+With the advances in technology miniaturization is sensor technology it is now possible to collect vast amounts of physical activity data  in cost effective way.  Currently the majority of in the data being collected is being used to track and analyze how much of a particular activity or exercise or movements is being done, however this collected data is hardly used to determine if a particular exercise is been done correctly. This class project study will use data from accelerometers to determine how well a weight lifting exercise is done. Based on the data provided, the random forest algorithm can predict with a high degree of accuracy whether an individual is doing correctly or not the weight lifting exercise. The main problem with random forest algorithm is performance scalability. This performance scalability could be improvded by reduing the number of sensors. For the specifica weight exercise locating a ssnor on the belt could provide an accurancy of approcimately 90%. If higher accuracies are required combining 2 sensor could potentially produce accuracies above 95%.
+
+### Study Objective
+The objective of this study is to determine if a machine learning algorithm can be used to determine or classify if a weight lifting exercise is being done in a correct way or not, “how well it is being done. Data from accelerometers on the belt, arm, forearm, and dumbbell of 6 participants will be used for this study
+
+### Data Description
+Data for this project comes originally from the web site groupware.les.inf.puc-rio.br/har.  Data was collected from accelerometers on the belt, arm, forearm, and dumbbell of six (6) participants.  “Six (6) young health participants (ages between 20-28 with little weight experience) were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).  Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes.  
+The training and test data for this project was downloaded from the following web sites: 
+
+* Training: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv  
+* Testing: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv  
+
+The training dataset consist of 19622 observations and 160 variables, while the test dataset consist of 20 observations and 160 variables. The training dataset will be used to train the model and validate the model. The test dataset will be used in the final step to apply the machine-learning algorithm and to submit predictions for course project grading.
+
+### Data Selection and transformation
+By simple observation using Microsoft Excel (opening the .csv training and test file) the following problems were identified:  
+
+* Variables with blanks or NAs or #DIV/0! Data
+* Variables that may have been derived from the original data such max, min, var, std, amplitude etc.  
+* Variables that are not relevant to this project, such as name of participants, observation numbers, and windows are excluded from the datasets.   
+
+The following R code cleans up and prepares the data to be used for the project. Although timestamps may be relevant for this project, since we do not have a description of they represent and how it was taken, they will be removed from the data set
+
+```{r}
+# SETUP WORKING DIRECTORY AND LOAD CARET LIBRARY
+setwd("~/Documents/Machine Learning - Coursera/Project");
+library("caret");
+```
+
+```{r}
+# CLEAN UP TRAINING DATASET AND SELECT DATASET VARIABLES FOR THE STUDY
+fileName <- "pml-training.csv";
+train <- read.csv(fileName, header=TRUE, sep=",", stringsAsFactors=FALSE, na.strings= c("NA",""," ","#DIV/0!"));
+exclude_cols <- grep("^var|^avg|^max|^min|^std|^amplitude|^skewness|^kurtosis", names(train));
+train <- train[ , -exclude_cols]; 
+train <- train[ , 8:60]; 
+train <- train[ , c(53, 1:52)]
+train$classe <- as.factor(train$classe);
+
+# CLEAN UP TEST DATASET AND SELECT DATASET VARIABLES FOR THE STUDY
+fileName <- "pml-testing.csv";
+test <- read.csv(fileName, header=TRUE, sep=",", stringsAsFactors=FALSE, na.strings= c("NA",""," ","#DIV/0!"));
+test <- test[ ,-exclude_cols]; 
+test <- test[ , 8:60]; 
+test <- test[ , c(53, 1:52)]
+
+```{r}
+# SUMMARY CLASSE 
+summary(train$classe)
+```
+
+```{r}
+# VERIFY IF SELECTED VARIABLES HAVE UNIQUE VALUES
+nearZeroVar(train[ ,-1], saveMetrics= TRUE);
+```
+
+The "nearZeroVar" R function diagnosis variables (predictors) that have one unique value or very unique values relatve to the number of samples. These are variables that have very small variance relative to the number of samples.  
+
+The following R code splits the “train dataset” into 60% used for training purposes (trainDS) and 40% used for validation purposes. (validateDS). In addition, to estimate the performance of the algorithm on the dataset, the “cross validation (method=cv)” will be used. 
+
+```{r}
+# SPLIT TRAIN DATASET. 60% TRAINING & 40% VALIDATION
+set.seed(20150125);
+trainIndex <- createDataPartition(train$class, p = 0.60, list=FALSE);
+trainDS <- train[trainIndex, ];
+validateDS <- train[-trainIndex, ];
+
+# SETUP CROSS VALIDATION
+foldControl <- trainControl(method="cv", number=5)
+```
+
+### Machine Learning Models
+Since we are looking to determine or classify how well a weight lifting activity is done based on sensor information collected from four (4) accelerometers (dumbbell, forearm, arm, & waist belt), two classification models will be explored:  
+
+* Classification tree (method = rpart)
+* Random forest (method = rf)
+
+The Classification tree performs well with large datasets, and it is also very easy to understand and interpret On the other hand, it can create complex trees that do not generalize well or over-fitting. Random forests correct for decision trees habit of over-fitting to their training set, however it requires more processing time.  
+
+The random forest algorithm constructs multiple decision trees at the training time and outputting the class that is the mode of the classes or mean prediction of the individual trees.
+
+```{r}
+# MODEL No 1: CLASSIFICATION TREE
+startTimeModel <- format(Sys.time(), "%a %b %d, %Y - %X")
+library("rpart")
+modelFit1 <- train(classe ~ ., method="rpart", trControl = foldControl, data=trainDS);
+predictor1 <- predict(modelFit1, newdata = validateDS[,-1]);
+confMatrixModel1 <- confusionMatrix(validateDS$classe, predictor1);
+stopTimeModel <- format(Sys.time(), "%a %b %d, %Y - %X")
+modelFit1
+confMatrixModel1;
+```
+```{r, echo=FALSE}
+print("********** Model No 1 *********")
+print(c("Start date & time:", startTimeModel))
+print(c("Stop date & time:", stopTimeModel))
+```
+
+```{r}
+# MODEL No 2: RANDOM FOREST
+startTimeModel <- format(Sys.time(), "%a %b %d, %Y - %X")
+library("randomForest")
+modelFit2 <- train(classe ~ ., method="rf", trControl = foldControl, data=trainDS);
+predictor2 <- predict(modelFit2, newdata = validateDS[,-1]);
+confMatrixModel2 <- confusionMatrix(validateDS$classe, predictor2);
+stopTimeModel <- format(Sys.time(), "%a %b %d, %Y - %X")
+modelFit2
+confMatrixModel2
+```
+```{r, echo=FALSE}
+print("********** Model No 2 *********")
+print(c("Start date & time:", startTimeModel))
+print(c("Stop date & time:", stopTimeModel))
+```
+
+The Classification Tree algorithm has an estimated accuracy of only 57.65% but it in total it required about 12 seconds to train, On the other hand, the random tree algorithm has an estimated accuracy of 99% but it required about 600 seconds to train.  Therefore, for this specific situation we will use the random forest algorithm. 
+
+In order to reduce the amount of processing time required to we will explore only using data from one of the sensors at a time to determine what accuracy levels can be achieved. The following R code, using the random forest algorithm, determines for each individual sensor what accuracy levels can be achieved.
+
+```{r}
+sensorLoc <- c("_dumbbell", "_forearm", "_arm", "_belt");
+for (i in 1:4) { 
+  print(c("************ Sensor Location: ", sensorLoc[i]));  
+  startTimeModel <- format(Sys.time(), "%a %b %d, %Y - %X")
+  include_cols <- grep(sensorLoc[i], names(train));
+  sensorLocTrainDS <- trainDS[ ,c(1,include_cols)];
+  sensorLocValidateDS <- validateDS[ ,c(1,include_cols)];
+  sensorLocModelFit <- train(classe ~ ., method="rf", trControl = foldControl, data=sensorLocTrainDS);
+  sensorLocPredictor <- predict(sensorLocModelFit, newdata = sensorLocValidateDS[,-1]);
+  confMatrixSensorLoc <- confusionMatrix(sensorLocValidateDS$classe, sensorLocPredictor)$overall[1:6];
+  print(confMatrixSensorLoc)
+  stopTimeModel <- format(Sys.time(), "%a %b %d, %Y - %X")
+  print(c("Start date & time:", startTimeModel, " & Stop date & time:", stopTimeModel ))
+}
+```
+
+Based on the data provided using the random forest algorithm the best sensor to determine whether an individual is doing correctly a weight lifting exercise is to located in the belt, with a 91.6 accuracy. Since this technology can be used to advice weight lifters and it does not have pose any risk to the user it may be acceptable. Accuracy could potentially increase above 95% by combining measurements taken by 2 sensors, such as the belt and forearm sensor.
