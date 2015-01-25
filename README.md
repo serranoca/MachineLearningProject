@@ -1,2 +1,3 @@
 # MachineLearningProject
-Course Project Practical Machine Learning
+Practical Machine Learning - Class Project
+January 2015
